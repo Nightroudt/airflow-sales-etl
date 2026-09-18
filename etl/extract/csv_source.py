@@ -22,15 +22,24 @@ def generate_sample_transactions_csv(
     n: int = 500,
     num_products: int = 10,
     seed: int | None = None,
+    now: datetime | None = None,
 ) -> Path:
     """Write a CSV of synthetic transactions — the "CSV source" stand-in
-    the spec asked for, and also reused directly as a test fixture."""
+    the spec asked for, and also reused directly as a test fixture.
+
+    `now` defaults to the real current time; pass a fixed value together
+    with `seed` for byte-for-byte reproducible output in tests.
+    """
     rng = random.Random(seed)
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
 
     rows = [
         {
-            "transaction_id": str(uuid.uuid4()),
+            # Derived from the seeded RNG (not uuid.uuid4(), which draws from
+            # os.urandom() and would ignore `seed` entirely) so the same
+            # seed reproduces the exact same ids — needed for deterministic
+            # test fixtures.
+            "transaction_id": str(uuid.UUID(int=rng.getrandbits(128))),
             "product_id": rng.randint(1, num_products),
             "customer_id": rng.randint(1, 200),
             "quantity": rng.randint(1, 5),

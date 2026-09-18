@@ -6,6 +6,7 @@ DataFrames themselves — XCom isn't meant for bulk payloads), on a shared
 volume under DATA_DIR.
 """
 
+import os
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -25,7 +26,10 @@ structlog.configure(
 )
 logger = structlog.get_logger()
 
-DATA_DIR = "/opt/airflow/data"
+# Overridable so tests can point the DAG at a temp directory instead of the
+# real Docker-container path — production/docker-compose never needs to set
+# this, since the default already matches how the volume is mounted there.
+DATA_DIR = os.environ.get("SALES_ETL_DATA_DIR", "/opt/airflow/data")
 INCOMING_DIR = f"{DATA_DIR}/incoming"
 PROCESSED_DIR = f"{DATA_DIR}/processed"
 
@@ -33,7 +37,12 @@ PROCESSED_DIR = f"{DATA_DIR}/processed"
 # on every run, independently of which ones happen to appear in today's
 # transactions. Matches csv_source's default num_products so the demo data
 # lines up. A real system would read this from a catalog table instead.
-KNOWN_PRODUCT_IDS = list(range(1, 11))
+# Overridable (comma-separated) so tests can align it with a smaller sample
+# dataset instead of the full default range.
+_product_ids_env = os.environ.get("SALES_ETL_PRODUCT_IDS")
+KNOWN_PRODUCT_IDS = (
+    [int(x) for x in _product_ids_env.split(",")] if _product_ids_env else list(range(1, 11))
+)
 
 
 def alert_on_failure(context: dict) -> None:
