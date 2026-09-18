@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: warehouse
+          POSTGRES_PASSWORD: warehouse
+          POSTGRES_DB: warehouse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U warehouse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_WAREHOUSE_DATABASE_URL: postgresql+psycopg2://warehouse:warehouse@localhost:5432/warehouse
+      WAREHOUSE_DATABASE_URL: postgresql+psycopg2://warehouse:warehouse@localhost:5432/warehouse
+      API_STUB_BASE_URL: http://localhost:8199
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.3/constraints-3.12.txt"
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Initialize Airflow metadata DB
+        run: airflow db migrate
+
+      - name: Run tests
+        run: pytest -v
