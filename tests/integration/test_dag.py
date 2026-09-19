@@ -48,28 +48,41 @@ def test_full_pipeline_runs_end_to_end(sales_etl_dag, engine):
     assert mart_count > 0
 
 
+def _counts(engine) -> dict:
+    with engine.connect() as conn:
+        return {
+            "fact_rows": conn.execute(text("SELECT COUNT(*) FROM fact_sales")).scalar(),
+            "mart_rows": conn.execute(text("SELECT COUNT(*) FROM mart_daily_sales")).scalar(),
+            "dim_product_rows": conn.execute(text("SELECT COUNT(*) FROM dim_product")).scalar(),
+            "distinct_products": conn.execute(
+                text("SELECT COUNT(DISTINCT product_id) FROM dim_product")
+            ).scalar(),
+        }
+
+
 def test_rerunning_the_dag_does_not_duplicate_rows(sales_etl_dag, engine):
     """The concrete idempotency proof the spec asked for: running the same
-    pipeline twice against the same source data must not double row counts.
+    pipeline twice against the same source data must not double row counts
+    in fact_sales or mart_daily_sales.
+
+    dim_product's raw row *count* is deliberately excluded from that
+    guarantee: SCD Type 2 means each run legitimately appends a new
+    *version* per product (the API stub hands back a fresh updated_at every
+    call), so dim_product grows run over run by design — what must stay
+    stable instead is the *distinct* product_id count (the catalog itself
+    isn't changing, only its version history).
     """
     sales_etl_dag.test(execution_date=datetime(2026, 1, 1, tzinfo=UTC))
-
-    with engine.connect() as conn:
-        fact_count_1 = conn.execute(text("SELECT COUNT(*) FROM fact_sales")).scalar()
-        product_count_1 = conn.execute(text("SELECT COUNT(*) FROM dim_product")).scalar()
+    first = _counts(engine)
 
     sales_etl_dag.test(execution_date=datetime(2026, 1, 1, 6, tzinfo=UTC))
+    second = _counts(engine)
 
-    with engine.connect() as conn:
-        fact_count_2 = conn.execute(text("SELECT COUNT(*) FROM fact_sales")).scalar()
-        # A second run legitimately adds new dim_product *versions* (the API
-        # stub returns a fresh updated_at every call — that's the point of
-        # the demo) — versions growing isn't a duplication bug, but the
-        # *count of underlying products* must not exceed the id's synced.
-        product_count_2 = conn.execute(
-            text("SELECT COUNT(DISTINCT product_id) FROM dim_product")
-        ).scalar()
+    assert second["fact_rows"] == first["fact_rows"]
+    assert second["mart_rows"] == first["mart_rows"]
+    assert second["distinct_products"] == first["distinct_products"] == 5
 
-    assert fact_count_2 == fact_count_1
-    assert product_count_2 == 5
-    assert product_count_1 == 5
+    # Not a bug: this is the one metric that's *supposed* to grow — a
+    # second run that didn't add new dim_product versions would mean SCD2
+    # versioning silently stopped working.
+    assert second["dim_product_rows"] > first["dim_product_rows"]

@@ -114,6 +114,48 @@ def test_rebuilding_is_idempotent(engine):
     assert count == 1
 
 
+def test_top_product_tie_is_broken_deterministically(engine):
+    """Without a tiebreaker, ROW_NUMBER() over equal revenue values has no
+    guaranteed order — the "top product" could flip between rebuilds even
+    though nothing about the underlying data changed."""
+    seed_products(engine, 1, 2)
+    day = datetime(2026, 3, 1, tzinfo=UTC)
+    df = pd.DataFrame(
+        [
+            txn("a1", 1, quantity=1, unit_price=10.0, day=day),  # revenue 10
+            txn("a2", 2, quantity=1, unit_price=10.0, day=day),  # revenue 10 — tie
+        ]
+    )
+    upsert_fact_sales(engine, df)
+
+    picks = set()
+    for _ in range(5):
+        build_daily_mart(engine)
+        picks.add(fetch_mart_row(engine, date(2026, 3, 1)).top_product_id)
+
+    assert picks == {1}  # lower product_id wins the tie, every time
+
+
+def test_stale_day_is_removed_when_its_transactions_move_elsewhere(engine):
+    """An INSERT/UPDATE-only upsert would never revisit a day whose
+    transactions have all been re-dated (or deleted) — its mart row would
+    keep stale totals forever. build_daily_mart must clean those up."""
+    seed_products(engine, 1)
+    day1 = datetime(2026, 3, 1, tzinfo=UTC)
+    day2 = datetime(2026, 3, 2, tzinfo=UTC)
+
+    upsert_fact_sales(engine, pd.DataFrame([txn("a1", 1, quantity=1, unit_price=10.0, day=day1)]))
+    build_daily_mart(engine)
+    assert fetch_mart_row(engine, date(2026, 3, 1)) is not None
+
+    # Same transaction_id, moved to a different day — day1 now has zero facts.
+    upsert_fact_sales(engine, pd.DataFrame([txn("a1", 1, quantity=1, unit_price=10.0, day=day2)]))
+    build_daily_mart(engine)
+
+    assert fetch_mart_row(engine, date(2026, 3, 1)) is None
+    assert fetch_mart_row(engine, date(2026, 3, 2)) is not None
+
+
 def test_rebuild_reflects_newly_loaded_transactions(engine):
     seed_products(engine, 1)
     day = datetime(2026, 3, 1, tzinfo=UTC)

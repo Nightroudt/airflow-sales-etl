@@ -20,5 +20,10 @@ def fetch_products(client: httpx.Client, product_ids: list[int]) -> pd.DataFrame
     response.raise_for_status()
 
     df = pd.DataFrame(response.json(), columns=PRODUCT_COLUMNS)
-    df["updated_at"] = pd.to_datetime(df["updated_at"])
+    # utc=True to match every other datetime coercion in this codebase
+    # (cleaning.py, enrichment.py) — without it, a naive timestamp from a
+    # real (non-stub) supplier would later get *localized* rather than
+    # *converted* by enrichment's utc=True parse, silently mis-recording
+    # wall-clock time as UTC.
+    df["updated_at"] = pd.to_datetime(df["updated_at"], utc=True)
     return df

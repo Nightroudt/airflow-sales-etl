@@ -54,10 +54,24 @@ def test_reloading_with_changed_data_updates_in_place(engine):
     assert row.quantity == 99
 
 
-def test_empty_dataframe_is_a_no_op(engine):
-    from etl.transform.cleaning import REQUIRED_COLUMNS
+def test_a_duplicate_transaction_id_within_one_batch_does_not_crash(engine):
+    """Postgres raises CardinalityViolation if ON CONFLICT DO UPDATE would
+    touch the same row twice in one INSERT. clean_transactions() already
+    dedupes upstream, but this loader must not depend on that — it should
+    survive unclean input by deduping itself (keeping the last occurrence).
+    """
+    df = pd.DataFrame([txn_row("t1", quantity=1), txn_row("t1", quantity=99)])
 
-    empty = pd.DataFrame(columns=REQUIRED_COLUMNS)
+    n = upsert_fact_sales(engine, df)
+
+    assert n == 1
+    assert fetch(engine, "t1").quantity == 99
+
+
+def test_empty_dataframe_is_a_no_op(engine):
+    from etl.extract.csv_source import TRANSACTION_COLUMNS
+
+    empty = pd.DataFrame(columns=TRANSACTION_COLUMNS)
 
     n = upsert_fact_sales(engine, empty)
 

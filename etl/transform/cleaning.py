@@ -2,14 +2,7 @@
 
 import pandas as pd
 
-REQUIRED_COLUMNS = [
-    "transaction_id",
-    "product_id",
-    "customer_id",
-    "quantity",
-    "unit_price",
-    "transaction_date",
-]
+from etl.extract.csv_source import TRANSACTION_COLUMNS
 
 
 def clean_transactions(df: pd.DataFrame) -> pd.DataFrame:
@@ -18,7 +11,7 @@ def clean_transactions(df: pd.DataFrame) -> pd.DataFrame:
     Never mutates the input DataFrame.
     """
     df = df.copy()
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    df = df.dropna(subset=TRANSACTION_COLUMNS)
 
     df["transaction_id"] = df["transaction_id"].astype(str)
     df["product_id"] = pd.to_numeric(df["product_id"], errors="coerce").astype("Int64")
@@ -29,7 +22,7 @@ def clean_transactions(df: pd.DataFrame) -> pd.DataFrame:
 
     # A failed coercion above shows up as null in that column — drop those
     # rows the same way as originally-missing data.
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    df = df.dropna(subset=TRANSACTION_COLUMNS)
 
     df = df[(df["quantity"] > 0) & (df["unit_price"] >= 0)]
     df = df.drop_duplicates(subset="transaction_id", keep="first")

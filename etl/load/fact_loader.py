@@ -26,6 +26,13 @@ def upsert_fact_sales(engine: Engine, df: pd.DataFrame, loaded_at: datetime | No
 
     loaded_at = loaded_at or datetime.now(UTC)
 
+    # Postgres raises CardinalityViolation ("ON CONFLICT DO UPDATE command
+    # cannot affect row a second time") if two rows in the *same* INSERT
+    # share the conflict key — unlike scd_loader's DO NOTHING, DO UPDATE
+    # has no tolerance for that. clean_transactions() already dedupes, but
+    # this loader shouldn't crash if it's ever called with unclean input.
+    df = df.drop_duplicates(subset="transaction_id", keep="last")
+
     records = [
         {
             "transaction_id": row.transaction_id,

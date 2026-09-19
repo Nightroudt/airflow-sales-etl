@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Index,
     Integer,
     MetaData,
     Numeric,
@@ -41,6 +42,14 @@ dim_product = Table(
     UniqueConstraint("product_id", "source_updated_at", name="uq_dim_product_version"),
 )
 
+# Mirrors the partial index created in the initial Alembic migration. Kept
+# in sync here too — this Table/MetaData is what `alembic revision
+# --autogenerate` diffs against, and what tests/integration/conftest.py's
+# `metadata.create_all()` builds; without this, autogenerate would propose
+# *dropping* the index, and tests would silently run against a schema
+# missing it.
+Index("ix_dim_product_current", dim_product.c.product_id, postgresql_where=dim_product.c.is_current)
+
 # Fact table: one row per sales transaction. transaction_id is the natural
 # key from the source CSV — the idempotency anchor for ON CONFLICT DO UPDATE.
 fact_sales = Table(
@@ -54,6 +63,9 @@ fact_sales = Table(
     Column("transaction_date", DateTime(timezone=True), nullable=False),
     Column("loaded_at", DateTime(timezone=True), nullable=False),
 )
+
+# Mirrors the migration's index backing mart_builder's day-range scans.
+Index("ix_fact_sales_transaction_date", fact_sales.c.transaction_date)
 
 # Daily aggregate mart, rebuilt idempotently (ON CONFLICT DO UPDATE) from
 # fact_sales joined to the *current* dim_product version.

@@ -9,7 +9,7 @@ load downstream actually have something to version.
 import random
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 
 from api_stub.schemas import ProductOut
 
@@ -53,5 +53,10 @@ def get_products(
 ) -> list[ProductOut]:
     """Batch endpoint — one call for many ids, so extract doesn't do N+1
     requests against the supplier."""
-    product_ids = [int(x) for x in ids.split(",") if x.strip()]
+    try:
+        product_ids = [int(x) for x in ids.split(",") if x.strip()]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="ids must be a comma-separated list of integers"
+        ) from exc
     return [_random_product(pid) for pid in product_ids]

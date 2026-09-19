@@ -22,9 +22,14 @@ different orchestration paradigms: **streaming** there, **batch** here.
   rebuilt idempotently from the warehouse
 - Runs every 6 hours (`0 */6 * * *`), 3 retries with exponential backoff on
   every task, a structured-log alert on task failure
-- Fully idempotent: re-running the pipeline against the same source data
-  never duplicates a row — proven by a test that runs the whole DAG twice
-  and asserts row counts don't change
+- Idempotent: re-running the pipeline against the same source data never
+  duplicates a `fact_sales` row or a `mart_daily_sales` day — proven by a
+  test that runs the whole DAG twice and asserts those two row counts don't
+  change. `dim_product` is the one deliberate exception: SCD Type 2 means
+  each run appends a new *version* per product (the demo API stub hands
+  back a fresh `updated_at` every call), so its row count is *supposed* to
+  grow — what stays stable there is the distinct product count, not the
+  version count
 
 ## Architecture
 

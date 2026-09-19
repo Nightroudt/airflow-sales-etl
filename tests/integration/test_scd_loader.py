@@ -78,9 +78,9 @@ def test_different_products_are_independent(engine):
 
 
 def test_empty_dataframe_is_a_no_op(engine):
-    from etl.transform.enrichment import REQUIRED_COLUMNS
+    from etl.extract.api_source import PRODUCT_COLUMNS
 
-    empty = pd.DataFrame(columns=REQUIRED_COLUMNS)
+    empty = pd.DataFrame(columns=PRODUCT_COLUMNS)
 
     touched = upsert_dim_product(engine, empty)
 

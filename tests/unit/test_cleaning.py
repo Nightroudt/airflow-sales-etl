@@ -99,9 +99,9 @@ def test_does_not_mutate_input_dataframe():
 
 
 def test_empty_input_returns_empty_output():
-    from etl.transform.cleaning import REQUIRED_COLUMNS
+    from etl.extract.csv_source import TRANSACTION_COLUMNS
 
-    df = pd.DataFrame(columns=REQUIRED_COLUMNS)
+    df = pd.DataFrame(columns=TRANSACTION_COLUMNS)
 
     out = clean_transactions(df)
 

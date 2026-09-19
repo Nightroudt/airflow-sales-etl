@@ -4,7 +4,7 @@ a bogus dimension version."""
 
 import pandas as pd
 
-REQUIRED_COLUMNS = ["product_id", "name", "category", "supplier", "unit_cost", "updated_at"]
+from etl.extract.api_source import PRODUCT_COLUMNS
 
 
 def shape_products(df: pd.DataFrame) -> pd.DataFrame:
@@ -12,7 +12,7 @@ def shape_products(df: pd.DataFrame) -> pd.DataFrame:
     updated_at) — defense-in-depth alongside the DB's own ON CONFLICT, in
     case the API returned the same version twice in one batch."""
     df = df.copy()
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    df = df.dropna(subset=PRODUCT_COLUMNS)
 
     df["product_id"] = pd.to_numeric(df["product_id"], errors="coerce").astype("Int64")
     df["unit_cost"] = pd.to_numeric(df["unit_cost"], errors="coerce")
@@ -21,7 +21,7 @@ def shape_products(df: pd.DataFrame) -> pd.DataFrame:
     df["category"] = df["category"].astype(str).str.strip()
     df["supplier"] = df["supplier"].astype(str).str.strip()
 
-    df = df.dropna(subset=REQUIRED_COLUMNS)
+    df = df.dropna(subset=PRODUCT_COLUMNS)
     df = df[df["unit_cost"] >= 0]
     df = df.drop_duplicates(subset=["product_id", "updated_at"], keep="last")
 
